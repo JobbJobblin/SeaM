@@ -126,6 +126,7 @@ class seam_gui(QWidget):
         self.processor.user_rename_choice.connect(self.show_input_dialog)
 
         self.processor.fatal_error.connect(self.show_error)
+        self.processor.finish_processing_success.connect(self.show_success)
 
         #self.processor.log_signal.connect(self.log_label.setText)
 
@@ -139,12 +140,13 @@ class seam_gui(QWidget):
             self.processor.start_processing.emit(from_dir, to_dir, search_text)
         except Exception as e:
             print(e)
+
     def show_confirmation(self, title, question):
         reply = QMessageBox.question(
             self, title, question,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        self.processor._set_user_answer(reply == QMessageBox.StandardButton.Yes)
+        self.processor._set_user_answer(reply)
 
     def show_mult_choice(self, title, question, buttons):
         msg_box = QMessageBox()
@@ -157,9 +159,8 @@ class seam_gui(QWidget):
                 msg_box.setDefaultButton(button)
 
         msg_box.exec()
-        self.processor._set_user_answer(msg_box.buttons().index(msg_box.clickedButton()))
         # Возвращаем индекс нажатой кнопки (0-3)
-        #return msg_box.buttons().index(msg_box.clickedButton())
+        self.processor._set_user_answer(msg_box.buttons().index(msg_box.clickedButton()))
 
     def show_input_dialog(self, title, question, base_name):
         dialog = QDialog(self)
@@ -191,7 +192,8 @@ class seam_gui(QWidget):
         # Валидация
         def validate_text():
             new_text = line_edit.text()
-            is_valid = new_text.strip() != "" and new_text != base_name
+            #Убрана проверка на непустое название для автоинкремента
+            is_valid = new_text != base_name # and new_text.strip() != ""
             error_label.setVisible(not is_valid)
             ok_button.setEnabled(is_valid)
 
@@ -203,10 +205,15 @@ class seam_gui(QWidget):
 
         # Обработка
         result = ""
+
         if dialog.exec() == QDialog.DialogCode.Accepted:
             result = line_edit.text()
+            """
             if result == base_name:
                 result = ""
+            """
+            if result == '':
+                result = 'User_autoincrement_choice_01'
         else:  # Если нажата кнопка Cancel
             result = "User_cancel_01"
 
@@ -222,6 +229,33 @@ class seam_gui(QWidget):
         icon_label.setPixmap(pixmap.scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio))
 
         text_label = QLabel(e)
+        text_label.setWordWrap(True)
+
+        ok_button = QPushButton("OK")
+        ok_button.clicked.connect(dialog.accept)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(icon_label, alignment=Qt.AlignmentFlag.AlignLeft)
+        hbox.addWidget(text_label, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        vbox = QVBoxLayout()
+        vbox.addLayout(hbox)
+        vbox.addWidget(ok_button, alignment=Qt.AlignmentFlag.AlignRight)
+
+        dialog.setLayout(vbox)
+        dialog.exec()
+        return dialog
+
+    def show_success(self, result_msg: str):
+        """Функция поп-апов (окно "успеха")"""
+        dialog = QDialog()
+        dialog.setWindowTitle('Успех!')
+
+        icon_label = QLabel()
+        pixmap = QPixmap(self.success_icon_path) #Указан тип строки или пути, если захочется потом поменять иконку или добавить возможность пользователю кастомизировать её
+        icon_label.setPixmap(pixmap.scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio))
+
+        text_label = QLabel(result_msg)
         text_label.setWordWrap(True)
 
         ok_button = QPushButton("OK")
