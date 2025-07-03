@@ -172,9 +172,12 @@ class seam_gui(QWidget):
         # Основные элементы
         label = QLabel(question)
         line_edit = QLineEdit(base_name)
-        error_label = QLabel("Имя должно отличаться от исходного!")
+        error_label = QLabel() #("Имя должно отличаться от исходного!")
         error_label.setStyleSheet("color: red; font: italic;")
         error_label.setVisible(False)
+
+        hint_label = QLabel('Для автоматического переименования сделайте поле пустым')
+        hint_label.setStyleSheet('color: green; font: bald;')
 
         # Кнопки
         button_box = QDialogButtonBox(
@@ -183,19 +186,43 @@ class seam_gui(QWidget):
         )
         ok_button = button_box.button(QDialogButtonBox.StandardButton.Ok)
 
-        # Компоновка
+        # Добавление виджетов
         layout.addWidget(label)
         layout.addWidget(error_label)
         layout.addWidget(line_edit)
         layout.addWidget(button_box)
+        layout.addWidget(hint_label)
 
         # Валидация
         def validate_text():
             new_text = line_edit.text()
+            error_hint_text = ''
             #Убрана проверка на непустое название для автоинкремента
-            is_valid = new_text != base_name # and new_text.strip() != ""
-            error_label.setVisible(not is_valid)
-            ok_button.setEnabled(is_valid)
+            error_hint_text = error_hint_text + ("Имя должно отличаться от исходного!") if not new_text != base_name else error_hint_text # and new_text.strip() != ""
+
+            #Расширенная логика валидации 03072025
+            # Проверка на запрещённые символы
+            forbidden_chars = set('<>:"/\\|?*')
+            forbidden_chars.update(chr(i) for i in range(32))
+            forbidden_chars.add(chr(127))
+            print(error_hint_text)
+            error_hint_text = error_hint_text + ("\nЗапрещённые символы в имени!") if any(char in forbidden_chars for char in new_text) else error_hint_text
+
+            # Проверка на зарезервированные имена
+            reserved_names = {
+                "CON", "PRN", "AUX", "NUL",
+                *[f"COM{i}" for i in range(1, 10)],
+                *[f"LPT{i}" for i in range(1, 10)]
+            }
+            name_without_ext = new_text.split('.')[0].upper()
+            error_hint_text = error_hint_text + ("\nЗарезервированнное имя Windows!") if name_without_ext in reserved_names else error_hint_text
+
+            # Проверка на завершающие точку/пробел
+            error_hint_text = error_hint_text + ("\nНе может заканчиваться на точку или пробел!") if new_text.endswith(('.', ' ')) else error_hint_text
+
+            error_label.setText(error_hint_text)
+            error_label.setVisible(not error_hint_text == '')
+            ok_button.setEnabled(error_hint_text == '')
 
         line_edit.textChanged.connect(validate_text)
         button_box.accepted.connect(dialog.accept)
@@ -204,14 +231,8 @@ class seam_gui(QWidget):
         validate_text()
 
         # Обработка
-        result = ""
-
         if dialog.exec() == QDialog.DialogCode.Accepted:
             result = line_edit.text()
-            """
-            if result == base_name:
-                result = ""
-            """
             if result == '':
                 result = 'User_autoincrement_choice_01'
         else:  # Если нажата кнопка Cancel
