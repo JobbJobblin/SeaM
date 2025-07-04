@@ -9,9 +9,11 @@ from PyQt6.QtGui import QIcon, QPixmap
 from .search_move import res_search
 from .worker_seam import seam_worker
 
+# Класс главного потока интерфейса
 class seam_gui(QWidget):
 
-    def __init__(self, common_path):
+    # Конструктор
+    def __init__(self) -> None:
         super().__init__()
 
         self.processor = seam_worker()
@@ -19,47 +21,43 @@ class seam_gui(QWidget):
         self.processor.moveToThread(self.processor_thread)
         self.processor_thread.start()
 
-        self.init_ui(common_path)
+        self.init_ui()
         self.connect_signals()
 
-    def init_ui(self, common_path):
+    # Функция инициализации интерфейса
+    def init_ui(self) -> None:
         # Общая информация
         self.setWindowTitle("SeaMs Reasonable")
         self.setFixedSize(300, 370)
-        self.common_path = common_path
-        self.icon_path = os.path.join(self.common_path, 'images', 'mainicon.png')
+        self.common_path = QDir.currentPath()
+
+        # Иконки
+        self.icon_path = QIcon(os.path.join(self.common_path, 'images', 'mainicon.png'))
+        self.setWindowIcon(self.icon_path)
+
         self.error_icon_path = os.path.join(self.common_path, 'images', 'erricon.png')
         self.success_icon_path = os.path.join(self.common_path, 'images', 'sucicon.png')
 
-        # Icons
-        Icon = QIcon('icon.png')
-        Error_Icon = QIcon('erricon.png')
-
-        self.setWindowIcon(Icon)
-
         layout = QVBoxLayout()
 
-        # Значения по умолчанию
-        self.start_dir = QDir.currentPath()
-
         # Виджеты
-        # From directory
+        # Откуда
         self.From_Dir_label = QLabel(f"From directory: ")
-        self.From_Dir_label_2 = QLabel(f"{self.start_dir}")
+        self.From_Dir_label_2 = QLabel(f"{self.common_path}")
         self.From_Dir_button = QPushButton('Choose directory...')
         self.From_Dir_button.clicked.connect(lambda: self.choose_directory_dialog(self.From_Dir_label_2))
 
-        # To directory
+        # Куда
         self.To_Dir_label = QLabel(f"To directory: ")
-        self.To_Dir_label_2 = QLabel(f"{self.start_dir}")
+        self.To_Dir_label_2 = QLabel(f"{self.common_path}")
         self.To_Dir_button = QPushButton('Choose directory...')
         self.To_Dir_button.clicked.connect(lambda: self.choose_directory_dialog(self.To_Dir_label_2))
 
-        # Search Text
+        # Что ищем
         self.Search_Text_label = QLabel('You are searching for: ')
         self.Search_Text_line = QLineEdit("Мартья")#('Some happiness in this foul world')
 
-        # Search starter
+        # Кнопка инициализации поиска
         self.Search_Starter_btn = QPushButton("START")
 
         """
@@ -67,46 +65,48 @@ class seam_gui(QWidget):
         self.Search_Starter_btn.clicked.connect(lambda: self.search_starter(self.From_Dir_label_2, self.To_Dir_label_2, self.Search_Text_line))
         """
 
-        # Dividers
+        # Разделители
         self.divider_1 = QLabel('******************************************************')
         self.divider_2 = QLabel('******************************************************')
         self.divider_3 = QLabel('******************************************************')
 
         # Размещение виджетов
 
-        # From directory
+        # Откуда
         layout.addWidget(self.From_Dir_label)
         layout.addWidget(self.From_Dir_label_2)
         layout.addWidget(self.From_Dir_button)
         layout.addWidget(self.divider_1)
 
-        # To directory
+        # Куда
         layout.addWidget(self.To_Dir_label)
         layout.addWidget(self.To_Dir_label_2)
         layout.addWidget(self.To_Dir_button)
         layout.addWidget(self.divider_2)
 
-        # Search Text
+        # Что ищем
         layout.addWidget(self.Search_Text_label)
         layout.addWidget(self.Search_Text_line)
         layout.addWidget(self.divider_3)
 
-        # Search Starter
+        # Кнопка инициализации поиска
         layout.addWidget(self.Search_Starter_btn)
 
+        # Сбор макета
         self.setLayout(layout)
 
+    # Вызов окна выбора директории
     def choose_directory_dialog(self, label: QLabel):
         # Вызываем диалог выбора директории
         directory = QFileDialog.getExistingDirectory(
             self,
-            "Choose directory",
-            label.text(),  # Начальная директория
+            "Здесь могла бы быть ваша реклама: 8 800 ",
+            label.text(),  # Директория для поиска
             QFileDialog.Option.ShowDirsOnly  # Показывать только директории
         )
 
         if directory:  # Если пользователь выбрал директорию (не нажал "Отмена")
-            label.setText(f"{directory}")
+            label.setText(directory)
 
     """
     # Nogui option
@@ -131,8 +131,6 @@ class seam_gui(QWidget):
         #self.processor.log_signal.connect(self.log_label.setText)
 
     def search_starter(self):
-        #self.Search_Starter_btn.setEnabled(False)
-
         from_dir = self.From_Dir_label_2.text()
         to_dir = self.To_Dir_label_2.text()
         search_text = self.Search_Text_line.text()
@@ -268,6 +266,7 @@ class seam_gui(QWidget):
         return dialog
 
     def show_success(self, result_msg: str):
+
         """Функция поп-апов (окно "успеха")"""
         dialog = QDialog()
         dialog.setWindowTitle('Успех!')

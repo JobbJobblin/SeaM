@@ -29,7 +29,7 @@ class seam_worker(QObject):
         self.start_processing.connect(self.data_processor)
 
     # Главная функция обработки запроса поиска
-    def data_processor(self, p_from_path:os.PathLike[str]|str, p_to_path:os.PathLike[str]|str, p_search_text:os.PathLike[str]|str):
+    def data_processor(self, p_from_path:os.PathLike[str]|str, p_to_path:os.PathLike[str]|str, p_search_text:os.PathLike[str]|str) -> None:
 
         # сбор списка файлов директории
         try:
@@ -40,13 +40,11 @@ class seam_worker(QObject):
                 "Внимание! Пустой путь!",
                 "Указанный исходный путь пуст."
             )
-
-            self.log_signal.emit("Пустой исходный путь. Выполнение прервано.")  # logmsg
+            #self.log_signal.emit("Пустой исходный путь. Выполнение прервано.")  # logmsg
 
             # Ожидание ответа через флаг
             while not hasattr(self, 'continue_allowed'):
                 QApplication.processEvents() # Не блокируем интерфейс
-
             return
         # Если некорректно передан путь
         except FileNotFoundError as wrong_path_exception:
@@ -54,29 +52,24 @@ class seam_worker(QObject):
                 "Внимание! Некорректный путь!",
                 f"Указанный исходный путь не может быть найден. \nТекст ошибки: {wrong_path_exception}"
             )
-
-            self.log_signal.emit("Некорректный исходный путь. Выполнение прервано.")  # logmsg
+            #self.log_signal.emit("Некорректный исходный путь. Выполнение прервано.")  # logmsg
 
             # Ожидание ответа через флаг
             while not hasattr(self, 'continue_allowed'):
                 QApplication.processEvents()  # Не блокируем интерфейс
-
             return
-
         # Есои папка есть, но в ней нет подходящих по формату файлов
         if not l_file_list:
             self.fatal_error.emit(
                 "Внимание! Файлы не найдены!",
                 "Указанный исходный путь не содержит подходящих файлов."
             )
-
-            self.log_signal.emit("Нет подходящих файлов. Выполнение прервано.") # logmsg
+            #self.log_signal.emit("Нет подходящих файлов. Выполнение прервано.") # logmsg
 
             # Ожидание ответа через флаг
             while not hasattr(self, 'continue_allowed'):
                 QApplication.processEvents()  # Не блокируем интерфейс
             return
-
         try:
             l_processed_list = self.process_iterator(l_file_list, p_search_text)
         except Exception as e:
@@ -84,27 +77,23 @@ class seam_worker(QObject):
                 "Критическая ошибка!",
                 f"{e}"
             )
-
-            self.log_signal.emit(f"Произошла непредвиденная ошибка: {e}")#logmsg
+            #self.log_signal.emit(f"Произошла непредвиденная ошибка: {e}")#logmsg
 
             # Ожидание ответа через флаг
             while not hasattr(self, 'continue_allowed'):
                 QApplication.processEvents()  # Не блокируем интерфейс
             return
-
         if not l_processed_list:
             self.fatal_error.emit(
                 "Внимание! Файлы не найдены!",
                 "Поиск по данному запросу не принёс результатов."
             )
-
-            self.log_signal.emit("Поиск по запросу не принёс результатов.") #logmsg
+            #self.log_signal.emit("Поиск по запросу не принёс результатов.") #logmsg
 
             # Ожидание ответа через флаг
             while not hasattr(self, 'continue_allowed'):
                 QApplication.processEvents()  # Не блокируем интерфейс
             return
-
         try:
             self.forklift_operator(l_processed_list, p_to_path)
         except rollback_e as e:
@@ -112,21 +101,18 @@ class seam_worker(QObject):
                 "Отмена операции",
                 f"{e}"
             )
-
-            self.log_signal.emit(f"Произошла непредвиденная ошибка: {e}")  # logmsg
+            #self.log_signal.emit(f"Произошла непредвиденная ошибка: {e}")  # logmsg
 
             # Ожидание ответа через флаг
             while not hasattr(self, 'continue_allowed'):
                 QApplication.processEvents()  # Не блокируем интерфейс
             return
-
         except Exception as e:
             self.fatal_error.emit(
                 "Критическая ошибка!",
                 f"{e}"
             )
-
-            self.log_signal.emit(f"Произошла непредвиденная ошибка: {e}")  # logmsg
+            #self.log_signal.emit(f"Произошла непредвиденная ошибка: {e}")  # logmsg
 
             # Ожидание ответа через флаг
             while not hasattr(self, 'continue_allowed'):
@@ -170,7 +156,7 @@ class seam_worker(QObject):
 
     # Функция для копирования найденных файлов в выбранную папку
     def forklift_operator(self, file_list: list, destination_path: str | os.PathLike[str], l_inner_call: str = '',
-                          l_new_name: str = None):
+                          l_new_name: str = None) -> None:
         # Проверки для внешнего вызова
         if l_inner_call == '':
             # Проверка, что путь корректный
@@ -193,12 +179,15 @@ class seam_worker(QObject):
 
                 # Проверяем ответ
                 if self.continue_allowed == 65536: # Код QMessageBox.StandardButton.No
-                    self.log_signal.emit("Отменено пользователем")
+                    #self.log_signal.emit("Отменено пользователем")
                     raise Exception("Отменено пользователем")
 
         # Перемещение
         try:
+
+            #for i, f in enumerate(file_list):
             for f in file_list:
+                print(f)
                 # Определение базовых параметров для внешнего вызова
                 if l_inner_call == '':
                     file_name = os.path.basename(f)
@@ -232,16 +221,16 @@ class seam_worker(QObject):
                     match self.continue_allowed:
                         # Пропуск итерации
                         case 0:
-                            print('continue')
+                            #self.log_signal.emit(f"[{i}] Итерация пропущена")
                             continue
                         # Перезапись
                         case 1:
+                            #self.log_signal.emit(f"[{i}] Перезапись файла с названием '{f}'")
                             shutil.copy2(f, destination_path)
-                            print('copy2')
                             continue
                         # Переименование
                         case 2:
-                            print('rename sequence')
+                            #self.log_signal.emit(f"[{i}] Переименование...")
                             # Создаем event loop для ожидания ответа
                             Q_loop = QEventLoop()
                             self.continue_answer.connect(Q_loop.quit,
@@ -256,42 +245,38 @@ class seam_worker(QObject):
                             Q_loop.exec() # Блокируем выполнение Worker до ответа
                             self.continue_answer.disconnect(Q_loop.quit)
                             # Проверяем ответ
-                            print(f'aaaa{self.continue_allowed}')
                             if self.continue_allowed == "User_cancel_01":
-                                self.log_signal.emit("Отменено пользователем")
+                                #self.log_signal.emit(f"[{i}] Отменено пользователем")
                                 raise Exception("Отменено пользователем")
                             elif self.continue_allowed == 'User_autoincrement_choice_01':
                                 new_desti_name = f'{file_noext_name} - copy{file_ext}'
-                                #print(f"Final file directory will be {new_desti_name}\n")
+                                #self.log_signal.emit(f"[{i}] (AUTO) Новый путь: {new_desti_name}")
                                 self.forklift_operator([f], destination_path, '[Inner] ', new_desti_name)
                                 continue
                             else:
                                 new_desti_name = f'{self.continue_allowed}{file_ext}'
-                                #print(f"Final file directory will be {new_desti_name}\n")
+                                #self.log_signal.emit(f"[{i}] Новый путь: {new_desti_name}")
                                 self.forklift_operator([f], destination_path, '[Inner] ', new_desti_name)
                                 continue
                         # Выход
                         case 3:
-                            #print('User cancel')
-                            raise rollback_e('User cancel')
-                        # Проблема между стулом и клавиатурой
-                        case _:
-                            #print('Write 1, 2 or 3.\n')
-                            continue
+                            #self.log_signal.emit(f"[{i}] Отменено пользователем")
+                            raise rollback_e('Отменено пользователем')
         except rollback_e as e:
             raise Exception(e)
         except Exception as e:
             if l_inner_call is None:
                 raise Exception(f"Function 'forklift_operator' failed: {e}")
             else:
-                raise Exception(f"Inner function 'forklift_operator' failed: {e}")
-
-        self.finish_processing_success.emit(f'Операция завершена успешно.\n'
-                          f'Скопировано {len(file_list)} файлов в папку \n{destination_path}')
+                raise Exception(f"[INNER] function 'forklift_operator' failed: {e}")
+        if not l_inner_call:
+            self.finish_processing_success.emit(f'Операция завершена успешно.\n'
+                                                f'Скопировано {len(file_list)} файлов в папку \n{destination_path}')
 
     # Метод для установки ответа (вызывается из главного потока)
-    def _set_user_answer(self, allowed):
+    def _set_user_answer(self, allowed:str) -> None:
         if allowed:
+            print(allowed)
             self.continue_allowed = allowed
             self.continue_answer.emit(1)
         else:
