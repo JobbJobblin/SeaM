@@ -1,13 +1,12 @@
 import os.path
-import sys
-from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QLabel,
-                             QPushButton, QFileDialog, QLineEdit, QMessageBox, QInputDialog,
-                             QDialog, QHBoxLayout, QDialogButtonBox)
+
 from PyQt6.QtCore import QDir, Qt, QThread
 from PyQt6.QtGui import QIcon, QPixmap
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel,
+                             QPushButton, QFileDialog, QLineEdit, QMessageBox, QDialog, QHBoxLayout, QDialogButtonBox)
 
-from .search_move import res_search
 from .worker_seam import seam_worker
+
 
 # Класс главного потока интерфейса
 class seam_gui(QWidget):
@@ -55,7 +54,7 @@ class seam_gui(QWidget):
 
         # Что ищем
         self.Search_Text_label = QLabel('You are searching for: ')
-        self.Search_Text_line = QLineEdit("Мартья")#('Some happiness in this foul world')
+        self.Search_Text_line = QLineEdit("Мартья")  # ('Some happiness in this foul world')
 
         # Кнопка инициализации поиска
         self.Search_Starter_btn = QPushButton("START")
@@ -128,7 +127,7 @@ class seam_gui(QWidget):
         self.processor.fatal_error.connect(self.show_error)
         self.processor.finish_processing_success.connect(self.show_success)
 
-        #self.processor.log_signal.connect(self.log_label.setText)
+        # self.processor.log_signal.connect(self.log_label.setText)
 
     def search_starter(self):
         from_dir = self.From_Dir_label_2.text()
@@ -170,7 +169,7 @@ class seam_gui(QWidget):
         # Основные элементы
         label = QLabel(question)
         line_edit = QLineEdit(base_name)
-        error_label = QLabel() #("Имя должно отличаться от исходного!")
+        error_label = QLabel()  # ("Имя должно отличаться от исходного!")
         error_label.setStyleSheet("color: red; font: italic;")
         error_label.setVisible(False)
 
@@ -195,16 +194,18 @@ class seam_gui(QWidget):
         def validate_text():
             new_text = line_edit.text()
             error_hint_text = ''
-            #Убрана проверка на непустое название для автоинкремента
-            error_hint_text = error_hint_text + ("Имя должно отличаться от исходного!") if not new_text != base_name else error_hint_text # and new_text.strip() != ""
+            # Убрана проверка на непустое название для автоинкремента
+            error_hint_text = error_hint_text + (
+                "Имя должно отличаться от исходного!") if not new_text != base_name else error_hint_text  # and new_text.strip() != ""
 
-            #Расширенная логика валидации 03072025
+            # Расширенная логика валидации 03072025
             # Проверка на запрещённые символы
             forbidden_chars = set('<>:"/\\|?*')
             forbidden_chars.update(chr(i) for i in range(32))
             forbidden_chars.add(chr(127))
             print(error_hint_text)
-            error_hint_text = error_hint_text + ("\nЗапрещённые символы в имени!") if any(char in forbidden_chars for char in new_text) else error_hint_text
+            error_hint_text = error_hint_text + ("\nЗапрещённые символы в имени!") if any(
+                char in forbidden_chars for char in new_text) else error_hint_text
 
             # Проверка на зарезервированные имена
             reserved_names = {
@@ -213,10 +214,12 @@ class seam_gui(QWidget):
                 *[f"LPT{i}" for i in range(1, 10)]
             }
             name_without_ext = new_text.split('.')[0].upper()
-            error_hint_text = error_hint_text + ("\nЗарезервированнное имя Windows!") if name_without_ext in reserved_names else error_hint_text
+            error_hint_text = error_hint_text + (
+                "\nЗарезервированнное имя Windows!") if name_without_ext in reserved_names else error_hint_text
 
             # Проверка на завершающие точку/пробел
-            error_hint_text = error_hint_text + ("\nНе может заканчиваться на точку или пробел!") if new_text.endswith(('.', ' ')) else error_hint_text
+            error_hint_text = error_hint_text + ("\nНе может заканчиваться на точку или пробел!") if new_text.endswith(
+                ('.', ' ')) else error_hint_text
 
             error_label.setText(error_hint_text)
             error_label.setVisible(not error_hint_text == '')
@@ -244,7 +247,8 @@ class seam_gui(QWidget):
         dialog.setWindowTitle(Title)
 
         icon_label = QLabel()
-        pixmap = QPixmap(self.error_icon_path) #Указан тип строки или пути, если захочется потом поменять иконку или добавить возможность пользователю кастомизировать её
+        pixmap = QPixmap(
+            self.error_icon_path)  # Указан тип строки или пути, если захочется потом поменять иконку или добавить возможность пользователю кастомизировать её
         icon_label.setPixmap(pixmap.scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio))
 
         text_label = QLabel(e)
@@ -272,7 +276,8 @@ class seam_gui(QWidget):
         dialog.setWindowTitle('Успех!')
 
         icon_label = QLabel()
-        pixmap = QPixmap(self.success_icon_path) #Указан тип строки или пути, если захочется потом поменять иконку или добавить возможность пользователю кастомизировать её
+        pixmap = QPixmap(
+            self.success_icon_path)  # Указан тип строки или пути, если захочется потом поменять иконку или добавить возможность пользователю кастомизировать её
         icon_label.setPixmap(pixmap.scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio))
 
         text_label = QLabel(result_msg)

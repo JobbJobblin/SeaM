@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .exceptions import empty_from_e, rollback_e
 
+
 class res_search():
     # Конструктор
     def __init__(self, p_from_path, p_to_path, p_search_text):
@@ -29,7 +30,7 @@ class res_search():
         #     l_result = l_processed_list
         #     return
 
-        self.forklift_operator(l_processed_list,p_to_path)
+        self.forklift_operator(l_processed_list, p_to_path)
         # if isinstance(l_cursor, Exception):
         #     print(f'Exception occured: {l_cursor}')
         #     l_result = l_cursor
@@ -37,7 +38,7 @@ class res_search():
         #     return
 
     # Функция проверки наличия xml файлов в папке поиска и их сбор в список
-    def file_list(self, from_path:os.PathLike[str]) -> list[os.PathLike[str] | str] | Exception:
+    def file_list(self, from_path: os.PathLike[str]) -> list[os.PathLike[str] | str] | Exception:
         # try:
         # Генератор путей для файлов
         l_file_list = [
@@ -59,7 +60,7 @@ class res_search():
         #     return wrong_path_exception
 
     # Вспомогательная функция поиска текста внутри xml файла
-    def _xml_process(self, xml_file_path:os.PathLike[str], search_text:str) -> str | None | Exception:
+    def _xml_process(self, xml_file_path: os.PathLike[str], search_text: str) -> str | None | Exception:
         # try:
         tree = ET.parse(xml_file_path)
         xml_text = ET.tostring(tree.getroot(), encoding='unicode')
@@ -70,8 +71,8 @@ class res_search():
 
     # Функция-итератор запуска поиска внутри файла - если нужен более сложный/умный поиск, то дорабатывать нужно её или вложенную
     # Текущий поиск может искать вхождения без учёта регистра (самый простой вариант)
-    def process_iterator(self, l_file_list:list, search_text:str) -> list[str] | Exception:
-        #try:
+    def process_iterator(self, l_file_list: list, search_text: str) -> list[str] | Exception:
+        # try:
         with ThreadPoolExecutor(max_workers=4) as executor:
             results = list(executor.map(
                 lambda f: self._xml_process(f, search_text), l_file_list
@@ -82,12 +83,13 @@ class res_search():
         #     return e
 
     # Функция для копирования найденных файлов в выбранную папку
-    def forklift_operator(self, file_list:list, destination_path:str|os.PathLike[str], l_inner_call: str = '', l_new_name: str = None) -> str | None | Exception:
+    def forklift_operator(self, file_list: list, destination_path: str | os.PathLike[str], l_inner_call: str = '',
+                          l_new_name: str = None) -> str | None | Exception:
         # Проверки для внешнего вызова
         if l_inner_call == '':
             # Проверка, что путь корректный
             if not destination_path:
-                raise ValueError ('Destination path is empty')
+                raise ValueError('Destination path is empty')
             # Проверка, что путь пустой
             if os.listdir(destination_path):
                 while True:
@@ -95,7 +97,7 @@ class res_search():
                                "Are u sure? 'y/n'\n")
                     # Отмена операции
                     if q1.lower() == 'n':
-                        #print('User cancel')
+                        # print('User cancel')
                         return (result := 'User cancel')
                     # Запуск обработки
                     elif q1.lower() == 'y':
@@ -173,5 +175,3 @@ class res_search():
 
         return (result := f'Операция завершена успешно.'
                           f'Скопировано {len(file_list)} файлов в папку {destination_path}')
-
-
