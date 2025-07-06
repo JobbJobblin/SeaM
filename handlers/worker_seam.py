@@ -14,19 +14,12 @@ from .exceptions import empty_from_e, rollback_e
 
 class seam_worker(QObject):
     # Сигналы для gui
-    start_processing = pyqtSignal(str, str,
-                                  str)  # Служебный сигнал для запуска обработки (Args: from_dir, to_dir, search_text) (Передаётся из главного потока)
+    start_processing = pyqtSignal(str, str, str)  # Служебный сигнал для запуска обработки (Args: from_dir, to_dir, search_text) (Передаётся из главного потока)
     continue_answer = pyqtSignal(bool)  # Служебный сигнал для закрытия петли (QEventLoop) (Args: bool)
-    finish_processing_success = pyqtSignal(
-        str)  # Служебный сигнал для оповещения пользователя об успешном завершении операции (Args: Result message)
-
     user_confirm = pyqtSignal(str, str)  # Сигнал-шаблон для вопроса с двумя ответами (Args: Statement, Question)
-    user_multi_choice = pyqtSignal(str, str,
-                                   list)  # Сигнал-шаблон для вопроса со списком ответов (Args:  Title, Question, Option list)
-    user_rename_choice = pyqtSignal(str, str,
-                                    str)  # Сигнал для вопроса переименования (Args: Title, Question, base name)
-
-    fatal_error = pyqtSignal(str, str)  # Служебный сигнал для критических ошибок (Args: Error head, Error body)
+    user_multi_choice = pyqtSignal(str, str, list)  # Сигнал-шаблон для вопроса со списком ответов (Args:  Title, Question, Option list)
+    user_rename_choice = pyqtSignal(str, str, str)  # Сигнал для вопроса переименования (Args: Title, Question, base name)
+    end_dual_signal = pyqtSignal(str, str) #Конечный служебный сигнал с двумя аргументами (Args: msg header, msg body)
 
     log_signal = pyqtSignal(str)  # Служебный сигнал для логов (Args: Log Message)
 
@@ -39,14 +32,14 @@ class seam_worker(QObject):
 
     # Главная функция обработки запроса поиска
     def data_processor(self, p_from_path: os.PathLike[str] | str, p_to_path: os.PathLike[str] | str,
-                       p_search_text: os.PathLike[str] | str) -> None:
+                       p_search_text: os.PathLike[str] | str, p_search_options: list = []) -> None:
 
         # сбор списка файлов директории
         try:
             l_file_list = self.file_list(p_from_path)
         # Если путь пуст
         except empty_from_e as e:
-            self.fatal_error.emit(
+            self.end_dual_signal.emit(
                 "Внимание! Пустой путь!",
                 "Указанный исходный путь пуст."
             )
@@ -58,7 +51,7 @@ class seam_worker(QObject):
             return
         # Если некорректно передан путь
         except FileNotFoundError as wrong_path_exception:
-            self.fatal_error.emit(
+            self.end_dual_signal.emit(
                 "Внимание! Некорректный путь!",
                 f"Указанный исходный путь не может быть найден. \nТекст ошибки: {wrong_path_exception}"
             )
@@ -70,7 +63,7 @@ class seam_worker(QObject):
             return
         # Есои папка есть, но в ней нет подходящих по формату файлов
         if not l_file_list:
-            self.fatal_error.emit(
+            self.end_dual_signal.emit(
                 "Внимание! Файлы не найдены!",
                 "Указанный исходный путь не содержит подходящих файлов."
             )
@@ -83,7 +76,7 @@ class seam_worker(QObject):
         try:
             l_processed_list = self.process_iterator(l_file_list, p_search_text)
         except Exception as e:
-            self.fatal_error.emit(
+            self.end_dual_signal.emit(
                 "Критическая ошибка!",
                 f"{e}"
             )
@@ -94,7 +87,7 @@ class seam_worker(QObject):
                 QApplication.processEvents()  # Не блокируем интерфейс
             return
         if not l_processed_list:
-            self.fatal_error.emit(
+            self.end_dual_signal.emit(
                 "Внимание! Файлы не найдены!",
                 "Поиск по данному запросу не принёс результатов."
             )
@@ -107,9 +100,9 @@ class seam_worker(QObject):
 
         # Проверка пути перемещения
         try:
-            self.target_check(p_to_path)
+            self.target_check(l_processed_list, p_to_path)
         except Exception as e:
-            self.fatal_error.emit(
+            self.end_dual_signal.emit(
                 "Критическая ошибка!",
                 f"{e}"
             )
@@ -123,7 +116,7 @@ class seam_worker(QObject):
         try:
             self.forklift_operator(l_processed_list, p_to_path)
         except rollback_e as e:
-            self.fatal_error.emit(
+            self.end_dual_signal.emit(
                 "Отмена операции",
                 f"{e}"
             )
@@ -134,7 +127,7 @@ class seam_worker(QObject):
                 QApplication.processEvents()  # Не блокируем интерфейс
             return
         except Exception as e:
-            self.fatal_error.emit(
+            self.end_dual_signal.emit(
                 "Критическая ошибка!",
                 f"{e}"
             )
@@ -181,7 +174,7 @@ class seam_worker(QObject):
             raise Exception("Function 'process_iterator' failed")
 
     # Проверка папки перемещения
-    def target_check(self, destination_path: str | os.PathLike[str]):
+    def target_check(self, l_file_list: list,destination_path: str | os.PathLike[str]):
         # Проверка, что путь корректный
         if not destination_path:
             raise ValueError('Введён некорректный путь копирования (куда)')
@@ -205,6 +198,25 @@ class seam_worker(QObject):
                 # self.log_signal.emit("Отменено пользователем")
                 raise Exception("Отменено пользователем")
 
+        # Предупреждение о количестве файлов
+        # Создаем event loop для ожидания ответа
+        Q_loop = QEventLoop()
+        self.continue_answer.connect(Q_loop.quit,
+                                     Qt.ConnectionType.QueuedConnection)  # Выход из loop при ответе
+        # Запрашиваем подтверждение в главном потоке
+        self.user_confirm.emit(
+            "Внимание!",
+            f"Вы собираетесь переместить {len(l_file_list)} файлов.\n"
+            "Продолжить?"
+        )
+        Q_loop.exec()  # Блокируем выполнение Worker до ответа
+        self.continue_answer.disconnect(Q_loop.quit)
+
+        # Проверяем ответ
+        if self.continue_allowed == 65536:  # Код QMessageBox.StandardButton.No
+            # self.log_signal.emit("Отменено пользователем")
+            raise Exception("Отменено пользователем")
+
     # Фабрика декораторов. Принимает параметр по имени сигнала PyQT (Если будут ещё подобные эмиты)
     def fd_emit_on_outer_call(target_signal: str) -> Callable:
         # Функция декоратор
@@ -224,24 +236,27 @@ class seam_worker(QObject):
                     destination_path = args[1] if len(args) > 1 else kwargs.get("destination_path", "")
                     print("DEBUG: Emitting signal!")
 
-                    emit_msg = (
+                    emit_msg_head = ('Успех!')
+                    emit_msg_body = (
                         f'Операция завершена успешно.\n'
                                f'Скопировано {len(file_list)} файлов в папку \n{destination_path}')
-                    getattr(self, target_signal).emit(emit_msg)
+                    getattr(self, target_signal).emit(emit_msg_head, emit_msg_body)
                 return  result
             return inner_wrapper
         return dec_inner_handler
 
     # Функция для копирования найденных файлов в выбранную папку
-    @fd_emit_on_outer_call(target_signal = "finish_processing_success")
+    @fd_emit_on_outer_call(target_signal = 'end_dual_signal')
     def forklift_operator(self, file_list: list, destination_path: str | os.PathLike[str], l_new_name: str = None,
-                          l_inner_call: str = '') -> None:
+                          l_inner_call: str = '', l_user_toggle: bool = False) -> None:
+        # Параметр "Для всех"
+        self.user_options = l_user_toggle
+        print('out',self.user_options)
+
         # Перемещение
         try:
 
-            # for i, f in enumerate(file_list):
-            for f in file_list:
-                print(f)
+            for i, f in enumerate(file_list):
                 # Определение базовых параметров для внешнего вызова
                 if l_inner_call == '':
                     file_name = os.path.basename(f)
@@ -257,8 +272,29 @@ class seam_worker(QObject):
                 if not os.path.exists(desti_name):
                     shutil.copy2(f, desti_name)
                 else:
+                    # Если выбрана опция "Для всех"
+                    if self.user_options:
+                        print('aaaaa',self.user_options)
+                        match self.continue_allowed:
+                            # Пропуск итерации
+                            case 1:
+                                print(i)
+                                # self.log_signal.emit(f"[{i}] Итерация пропущена")
+                                continue
+                            # Перезапись файла
+                            case 2:
+                                # self.log_signal.emit(f"[{i}] Перезапись файла с названием '{f}'")
+                                shutil.copy2(f, destination_path)
+                                continue
+                            # Переименование
+                            case 3:
+                                new_desti_name = f'{file_noext_name} - copy{file_ext}'
+                                # self.log_signal.emit(f"[{i}] (AUTO) Новый путь: {new_desti_name}")
+                                self.forklift_operator([f], destination_path, new_desti_name, l_inner_call='[Inner] ', l_user_toggle = self.user_options)
+                                continue
                     # Если файл с таким названием уже есть
                     # Создаем event loop для ожидания ответа
+                    print('fall')
                     Q_loop = QEventLoop()
                     self.continue_answer.connect(Q_loop.quit,
                                                  Qt.ConnectionType.QueuedConnection)  # Выход из loop при ответе
@@ -274,30 +310,32 @@ class seam_worker(QObject):
                     # Проверяем ответ
                     match self.continue_allowed:
                         # Пропуск итерации
-                        case 0:
+                        case 1:
                             # self.log_signal.emit(f"[{i}] Итерация пропущена")
                             continue
                         # Перезапись
-                        case 1:
+                        case 2:
                             # self.log_signal.emit(f"[{i}] Перезапись файла с названием '{f}'")
                             shutil.copy2(f, destination_path)
                             continue
                         # Переименование
-                        case 2:
-                            # self.log_signal.emit(f"[{i}] Переименование...")
-                            # Создаем event loop для ожидания ответа
-                            Q_loop = QEventLoop()
-                            self.continue_answer.connect(Q_loop.quit,
-                                                         Qt.ConnectionType.QueuedConnection)  # Выход из loop при ответе
-                            # Запрашиваем подтверждение в главном потоке
-                            self.user_rename_choice.emit(
-                                "Введите новое имя",
-                                "Введите новое имя файла",  # или оставьте поле пустым для автоинкремента",
-                                f'{file_noext_name}'
-                            )
+                        case 3:
+                            # Проверка на опцию "Для всех"
+                            if not self.user_options:
+                                # self.log_signal.emit(f"[{i}] Переименование...")
+                                # Создаем event loop для ожидания ответа
+                                Q_loop = QEventLoop()
+                                self.continue_answer.connect(Q_loop.quit,
+                                                             Qt.ConnectionType.QueuedConnection)  # Выход из loop при ответе
+                                # Запрашиваем подтверждение в главном потоке
+                                self.user_rename_choice.emit(
+                                    "Введите новое имя",
+                                    "Введите новое имя файла",  # или оставьте поле пустым для автоинкремента",
+                                    f'{file_noext_name}'
+                                )
 
-                            Q_loop.exec()  # Блокируем выполнение Worker до ответа
-                            self.continue_answer.disconnect(Q_loop.quit)
+                                Q_loop.exec()  # Блокируем выполнение Worker до ответа
+                                self.continue_answer.disconnect(Q_loop.quit)
                             # Проверяем ответ
                             if self.continue_allowed == "User_cancel_01":
                                 # self.log_signal.emit(f"[{i}] Отменено пользователем")
@@ -305,15 +343,16 @@ class seam_worker(QObject):
                             elif self.continue_allowed == 'User_autoincrement_choice_01':
                                 new_desti_name = f'{file_noext_name} - copy{file_ext}'
                                 # self.log_signal.emit(f"[{i}] (AUTO) Новый путь: {new_desti_name}")
-                                self.forklift_operator([f], destination_path, new_desti_name, l_inner_call ='[Inner] ')
+                                print('before auto', self.user_options)
+                                self.forklift_operator([f], destination_path, new_desti_name, l_inner_call ='[Inner] ', l_user_toggle = self.user_options)
                                 continue
                             else:
                                 new_desti_name = f'{self.continue_allowed}{file_ext}'
                                 # self.log_signal.emit(f"[{i}] Новый путь: {new_desti_name}")
-                                self.forklift_operator([f], destination_path, new_desti_name, l_inner_call ='[Inner] ')
+                                self.forklift_operator([f], destination_path, new_desti_name, l_inner_call ='[Inner] ', l_user_toggle = self.user_options)
                                 continue
                         # Выход
-                        case 3:
+                        case 4:
                             # self.log_signal.emit(f"[{i}] Отменено пользователем")
                             raise rollback_e('Отменено пользователем')
         except rollback_e as e:
@@ -325,10 +364,19 @@ class seam_worker(QObject):
                 raise Exception(f"[INNER] function 'forklift_operator' failed: {e}")
 
     # Метод для установки ответа (вызывается из главного потока)
-    def _set_user_answer(self, allowed: str) -> None:
-        if allowed:
-            print(allowed)
-            self.continue_allowed = allowed
-            self.continue_answer.emit(1)
-        else:
-            raise Exception('Вернулся пустой ответ на вопрос. Пожалуйста, обратитесь к разработчику.')
+    def _set_user_answer(self, allowed: str|int, options: bool = None) -> None:
+        try:
+            if allowed:
+                print(allowed)
+                print(options)
+                self.continue_allowed = allowed
+                if options:
+                    self.user_options = options
+                self.continue_answer.emit(1)
+            else:
+                raise Exception('Вернулся пустой ответ на вопрос. Пожалуйста, обратитесь к разработчику.')
+        except Exception as e:
+            self.end_dual_signal.emit(
+                "Критическая ошибка!",
+                f"Method '_set_user_answer' failed to execute: {e}"
+            )

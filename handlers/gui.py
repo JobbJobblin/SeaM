@@ -2,7 +2,7 @@ import os.path
 
 from PyQt6.QtCore import QDir, Qt, QThread
 from PyQt6.QtGui import QIcon, QPixmap
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel,
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QCheckBox,
                              QPushButton, QFileDialog, QLineEdit, QMessageBox, QDialog, QHBoxLayout, QDialogButtonBox)
 
 from .worker_seam import seam_worker
@@ -95,11 +95,11 @@ class seam_gui(QWidget):
         self.setLayout(layout)
 
     # Вызов окна выбора директории
-    def choose_directory_dialog(self, label: QLabel):
+    def choose_directory_dialog(self, label: QLabel) -> None:
         # Вызываем диалог выбора директории
         directory = QFileDialog.getExistingDirectory(
             self,
-            "Здесь могла бы быть ваша реклама: 8 800 ",
+            "Здесь могла бы быть ваша реклама: 8 800 *** .. --",
             label.text(),  # Директория для поиска
             QFileDialog.Option.ShowDirsOnly  # Показывать только директории
         )
@@ -117,19 +117,24 @@ class seam_gui(QWidget):
             print(e)
     """
 
-    def connect_signals(self):
+    # Функция для подключения сигналов
+    def connect_signals(self) -> None:
+        # Инициализатор
         self.Search_Starter_btn.clicked.connect(self.search_starter)
 
+        # Диалоги
         self.processor.user_confirm.connect(self.show_confirmation)
         self.processor.user_multi_choice.connect(self.show_mult_choice)
         self.processor.user_rename_choice.connect(self.show_input_dialog)
 
-        self.processor.fatal_error.connect(self.show_error)
-        self.processor.finish_processing_success.connect(self.show_success)
+        # Конечные сообщения
+        self.processor.end_dual_signal.connect(self.show_err_or_succ)
 
+        # Логирование
         # self.processor.log_signal.connect(self.log_label.setText)
 
-    def search_starter(self):
+    # Функция, инициализирующая поиск
+    def search_starter(self) -> None:
         from_dir = self.From_Dir_label_2.text()
         to_dir = self.To_Dir_label_2.text()
         search_text = self.Search_Text_line.text()
@@ -138,17 +143,23 @@ class seam_gui(QWidget):
         except Exception as e:
             print(e)
 
-    def show_confirmation(self, title, question):
+    # Функция отображения диалогового окна "Да\Нет"
+    def show_confirmation(self, title: str, question: str) -> None:
         reply = QMessageBox.question(
             self, title, question,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         self.processor._set_user_answer(reply)
 
-    def show_mult_choice(self, title, question, buttons):
+    # Функция отображения диалогового с несколькими настраиваемыми вариантами ответа
+    def show_mult_choice(self, title: str, question: str, buttons: list) -> None:
         msg_box = QMessageBox()
         msg_box.setWindowTitle(title)
         msg_box.setText(question)
+
+        # Чекбокс с опцией "для всех"
+        self.checkbox = QCheckBox("Для всех (выбор опции 'переименовать' выполнит автопереименование)")  # Сохраняем как атрибут, если нужно будет проверить состояние
+        msg_box.setCheckBox(self.checkbox)
 
         for i, btn_text in enumerate(buttons):
             button = msg_box.addButton(btn_text, QMessageBox.ButtonRole.ActionRole)
@@ -156,10 +167,12 @@ class seam_gui(QWidget):
                 msg_box.setDefaultButton(button)
 
         msg_box.exec()
-        # Возвращаем индекс нажатой кнопки (0-3)
-        self.processor._set_user_answer(msg_box.buttons().index(msg_box.clickedButton()))
 
-    def show_input_dialog(self, title, question, base_name):
+        # Возвращаем индекс нажатой кнопки (1-4) + значение чекбокса
+        self.processor._set_user_answer(msg_box.buttons().index(msg_box.clickedButton())+1, msg_box.checkBox().isChecked()) # +1 чтобы не передавать 0
+
+    # Функция отображения диалогового окна с вводом текста
+    def show_input_dialog(self, title: str, question: str, base_name: str) -> None:
         dialog = QDialog(self)
         dialog.setWindowTitle(title)
 
@@ -190,8 +203,8 @@ class seam_gui(QWidget):
         layout.addWidget(button_box)
         layout.addWidget(hint_label)
 
-        # Валидация
-        def validate_text():
+        # Внутренная функция валидации текста
+        def _validate_text():
             new_text = line_edit.text()
             error_hint_text = ''
             # Убрана проверка на непустое название для автоинкремента
@@ -225,11 +238,11 @@ class seam_gui(QWidget):
             error_label.setVisible(not error_hint_text == '')
             ok_button.setEnabled(error_hint_text == '')
 
-        line_edit.textChanged.connect(validate_text)
+        line_edit.textChanged.connect(_validate_text)
         button_box.accepted.connect(dialog.accept)
         button_box.rejected.connect(dialog.reject)
         line_edit.selectAll()
-        validate_text()
+        _validate_text()
 
         # Обработка
         if dialog.exec() == QDialog.DialogCode.Accepted:
@@ -241,46 +254,22 @@ class seam_gui(QWidget):
 
         self.processor._set_user_answer(result)
 
-    def show_error(self, Title: str, e: Exception):
+    # Функция отображения конечного диалогового окна (успех\ошибка)
+    def show_err_or_succ(self, Title: str, e: Exception|str) -> QDialog:
         """Функция поп-апов (ошибки и окно "успеха")"""
         dialog = QDialog()
         dialog.setWindowTitle(Title)
 
         icon_label = QLabel()
-        pixmap = QPixmap(
-            self.error_icon_path)  # Указан тип строки или пути, если захочется потом поменять иконку или добавить возможность пользователю кастомизировать её
+        if Title == 'Успех!':
+            pixmap = QPixmap(
+                self.success_icon_path)  # Указан тип строки или пути, если захочется потом поменять иконку или добавить возможность пользователю кастомизировать её
+        else:
+            pixmap = QPixmap(
+                self.error_icon_path)  # Указан тип строки или пути, если захочется потом поменять иконку или добавить возможность пользователю кастомизировать её
         icon_label.setPixmap(pixmap.scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio))
 
         text_label = QLabel(e)
-        text_label.setWordWrap(True)
-
-        ok_button = QPushButton("OK")
-        ok_button.clicked.connect(dialog.accept)
-
-        hbox = QHBoxLayout()
-        hbox.addWidget(icon_label, alignment=Qt.AlignmentFlag.AlignLeft)
-        hbox.addWidget(text_label, alignment=Qt.AlignmentFlag.AlignLeft)
-
-        vbox = QVBoxLayout()
-        vbox.addLayout(hbox)
-        vbox.addWidget(ok_button, alignment=Qt.AlignmentFlag.AlignRight)
-
-        dialog.setLayout(vbox)
-        dialog.exec()
-        return dialog
-
-    def show_success(self, result_msg: str):
-
-        """Функция поп-апов (окно "успеха")"""
-        dialog = QDialog()
-        dialog.setWindowTitle('Успех!')
-
-        icon_label = QLabel()
-        pixmap = QPixmap(
-            self.success_icon_path)  # Указан тип строки или пути, если захочется потом поменять иконку или добавить возможность пользователю кастомизировать её
-        icon_label.setPixmap(pixmap.scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio))
-
-        text_label = QLabel(result_msg)
         text_label.setWordWrap(True)
 
         ok_button = QPushButton("OK")
