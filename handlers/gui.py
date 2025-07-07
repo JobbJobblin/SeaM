@@ -27,7 +27,7 @@ class seam_gui(QWidget):
     def init_ui(self) -> None:
         # Общая информация
         self.setWindowTitle("SeaMs Reasonable")
-        self.setFixedSize(300, 370)
+        self.setFixedSize(300, 450)
         self.common_path = QDir.currentPath()
 
         # Иконки
@@ -55,6 +55,23 @@ class seam_gui(QWidget):
         # Что ищем
         self.Search_Text_label = QLabel('You are searching for: ')
         self.Search_Text_line = QLineEdit("Мартья")  # ('Some happiness in this foul world')
+
+        # Опции
+        self.checkbox_nodes = QCheckBox('nodes (pending...)')
+        self.checkbox_filenames = QCheckBox('files (pending...)')
+        self.checkbox_insides = QCheckBox('insides (pending...)')
+        self.checkbox_register = QCheckBox('Учитывать регистр')
+        self.checkbox_partial = QCheckBox('partial (pending...)')
+        self.checkbox_only = QCheckBox('only (pending...)')
+
+        # Вспомогательные данные для валидации выбора опций
+        self.option_dict = {}
+        self.option_dict['nodes'] = self.checkbox_nodes.isChecked()
+        self.option_dict['filenames'] = self.checkbox_filenames.isChecked()
+        self.option_dict['insides'] = self.checkbox_insides.isChecked()
+        self.option_dict['register'] = self.checkbox_register.isChecked()
+        self.option_dict['partial'] = self.checkbox_partial.isChecked()
+        self.option_dict['only'] = self.checkbox_only.isChecked()
 
         # Кнопка инициализации поиска
         self.Search_Starter_btn = QPushButton("START")
@@ -87,6 +104,14 @@ class seam_gui(QWidget):
         layout.addWidget(self.Search_Text_label)
         layout.addWidget(self.Search_Text_line)
         layout.addWidget(self.divider_3)
+
+        # Опции
+        layout.addWidget(self.checkbox_nodes)
+        layout.addWidget(self.checkbox_filenames)
+        layout.addWidget(self.checkbox_insides)
+        layout.addWidget(self.checkbox_register)
+        layout.addWidget(self.checkbox_partial)
+        layout.addWidget(self.checkbox_only)
 
         # Кнопка инициализации поиска
         layout.addWidget(self.Search_Starter_btn)
@@ -130,16 +155,26 @@ class seam_gui(QWidget):
         # Конечные сообщения
         self.processor.end_dual_signal.connect(self.show_err_or_succ)
 
+        # Опции
+        self.checkbox_nodes.stateChanged.connect(self._supp_options)
+        self.checkbox_filenames.stateChanged.connect(self._supp_options)
+        self.checkbox_insides.stateChanged.connect(self._supp_options)
+        self.checkbox_register.stateChanged.connect(self._supp_options)
+        self.checkbox_partial.stateChanged.connect(self._supp_options)
+        self.checkbox_only.stateChanged.connect(self._supp_options)
+
         # Логирование
         # self.processor.log_signal.connect(self.log_label.setText)
 
     # Функция, инициализирующая поиск
     def search_starter(self) -> None:
+        # сбор главных параметров
         from_dir = self.From_Dir_label_2.text()
         to_dir = self.To_Dir_label_2.text()
         search_text = self.Search_Text_line.text()
+
         try:
-            self.processor.start_processing.emit(from_dir, to_dir, search_text)
+            self.processor.start_processing.emit(from_dir, to_dir, search_text, self.option_dict)
         except Exception as e:
             print(e)
 
@@ -170,6 +205,47 @@ class seam_gui(QWidget):
 
         # Возвращаем индекс нажатой кнопки (1-4) + значение чекбокса
         self.processor._set_user_answer(msg_box.buttons().index(msg_box.clickedButton())+1, msg_box.checkBox().isChecked()) # +1 чтобы не передавать 0
+
+    # Вспомогательная функция для выбора опции поиска "Только"
+    def _supp_options(self):
+        try:
+            # Перезапись значений
+            self.option_dict['nodes'] = self.checkbox_nodes.isChecked()
+            self.option_dict['filenames'] = self.checkbox_filenames.isChecked()
+            self.option_dict['insides'] = self.checkbox_insides.isChecked()
+            self.option_dict['register'] = self.checkbox_register.isChecked()
+            self.option_dict['partial'] = self.checkbox_partial.isChecked()
+            self.option_dict['only'] = self.checkbox_only.isChecked()
+
+            # Без list не будет списком - вернёт ошибку
+            all_keys = list(self.option_dict.keys())
+            variable_keys = all_keys[:-1]
+            last_key = all_keys[-1]
+
+            # Логика отключения кнопок
+            # Если включена опция "только" и выбран один из вариантов
+            if any(self.option_dict[k] for k in variable_keys) and self.option_dict[last_key]:
+                self.checkbox_nodes.setDisabled(True) if not self.checkbox_nodes.isChecked() else None
+                self.checkbox_filenames.setDisabled(True) if not self.checkbox_filenames.isChecked() else None
+                self.checkbox_insides.setDisabled(True) if not self.checkbox_insides.isChecked() else None
+                self.checkbox_register.setDisabled(True) if not self.checkbox_register.isChecked() else None
+                self.checkbox_partial.setDisabled(True) if not self.checkbox_partial.isChecked() else None
+            # Если 2 и более выбрано
+            elif sum(self.option_dict[k] for k in variable_keys) >= 2:
+               self.checkbox_only.setDisabled(True)
+            else:
+                self.checkbox_only.setDisabled(False)
+                self.checkbox_nodes.setDisabled(False)
+                self.checkbox_filenames.setDisabled(False)
+                self.checkbox_insides.setDisabled(False)
+                self.checkbox_register.setDisabled(False)
+                self.checkbox_partial.setDisabled(False)
+                self.checkbox_only.setDisabled(False)
+
+        except Exception as e:
+            print(e)
+
+
 
     # Функция отображения диалогового окна с вводом текста
     def show_input_dialog(self, title: str, question: str, base_name: str) -> None:

@@ -14,7 +14,7 @@ from .exceptions import empty_from_e, rollback_e
 
 class seam_worker(QObject):
     # Сигналы для gui
-    start_processing = pyqtSignal(str, str, str)  # Служебный сигнал для запуска обработки (Args: from_dir, to_dir, search_text) (Передаётся из главного потока)
+    start_processing = pyqtSignal(str, str, str, dict)  # Служебный сигнал для запуска обработки (Args: from_dir, to_dir, search_text, toggle_options) (Передаётся из главного потока)
     continue_answer = pyqtSignal(bool)  # Служебный сигнал для закрытия петли (QEventLoop) (Args: bool)
     user_confirm = pyqtSignal(str, str)  # Сигнал-шаблон для вопроса с двумя ответами (Args: Statement, Question)
     user_multi_choice = pyqtSignal(str, str, list)  # Сигнал-шаблон для вопроса со списком ответов (Args:  Title, Question, Option list)
@@ -32,7 +32,7 @@ class seam_worker(QObject):
 
     # Главная функция обработки запроса поиска
     def data_processor(self, p_from_path: os.PathLike[str] | str, p_to_path: os.PathLike[str] | str,
-                       p_search_text: os.PathLike[str] | str, p_search_options: list = []) -> None:
+                       p_search_text: os.PathLike[str] | str, p_search_options: dict) -> None:
 
         # сбор списка файлов директории
         try:
@@ -74,7 +74,7 @@ class seam_worker(QObject):
                 QApplication.processEvents()  # Не блокируем интерфейс
             return
         try:
-            l_processed_list = self.process_iterator(l_file_list, p_search_text)
+            l_processed_list = self.process_iterator(l_file_list, p_search_text, p_search_options)
         except Exception as e:
             self.end_dual_signal.emit(
                 "Критическая ошибка!",
@@ -153,21 +153,24 @@ class seam_worker(QObject):
             return l_file_list
 
     # Вспомогательная функция поиска текста внутри xml файла
-    def _xml_process(self, xml_file_path: os.PathLike[str], search_text: str) -> str | None | Exception:
+    def _xml_process(self, xml_file_path: os.PathLike[str], search_text: str, options: dict) -> str | None | Exception:
         try:
             tree = ET.parse(xml_file_path)
             xml_text = ET.tostring(tree.getroot(), encoding='unicode')
-            return xml_file_path if search_text.lower() in xml_text.lower() else None
+            if options['register']:
+                return xml_file_path if search_text in xml_text else None
+            else:
+                return xml_file_path if search_text.lower() in xml_text.lower() else None
         except Exception as e:
             raise Exception(f"Function '_xml_process' failed: {e}")
 
     # Функция-итератор запуска поиска внутри файла - если нужен более сложный/умный поиск, то дорабатывать нужно её или вложенную
     # Текущий поиск может искать вхождения без учёта регистра (самый простой вариант)
-    def process_iterator(self, l_file_list: list, search_text: str) -> list[str] | Exception:
+    def process_iterator(self, l_file_list: list, search_text: str, options: dict) -> list[str] | Exception:
         try:
             with ThreadPoolExecutor(max_workers=4) as executor:
                 results = list(executor.map(
-                    lambda f: self._xml_process(f, search_text), l_file_list
+                    lambda f: self._xml_process(f, search_text, options), l_file_list
                 ))
             return [r for r in results if r is not None]
         except Exception as e:
