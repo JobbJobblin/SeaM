@@ -14,3 +14,11 @@ class rollback_e(Exception):
 
     def __str__(self) -> str:
         return f'{self.msg}'
+
+class empty_spaces(Exception):
+    def __init__(self, msg: str = "Namespaces.txt is empty or doesn't exist") -> None:
+        self.msg = msg
+        super().__init__(self.msg)
+
+    def __str__(self) -> str:
+        return f'{self.msg}'

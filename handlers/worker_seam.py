@@ -1,20 +1,23 @@
 import os
+import re
 import shutil
 import xml.etree.ElementTree as ET
 
+from lxml import etree
+
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
-from typing import Callable, Any, Optional
+from typing import Callable, Any
 
 from PyQt6.QtCore import QObject, pyqtSignal, QEventLoop, Qt
 from PyQt6.QtWidgets import QApplication
 
-from .exceptions import empty_from_e, rollback_e
+from .exceptions import empty_from_e, rollback_e, empty_spaces
 
 
 class seam_worker(QObject):
     # Сигналы для gui
-    start_processing = pyqtSignal(str, str, str, dict)  # Служебный сигнал для запуска обработки (Args: from_dir, to_dir, search_text, toggle_options) (Передаётся из главного потока)
+    start_processing = pyqtSignal(str, str, str, dict, list)  # Служебный сигнал для запуска обработки (Args: from_dir, to_dir, search_text, toggle_options) (Передаётся из главного потока)
     continue_answer = pyqtSignal(bool)  # Служебный сигнал для закрытия петли (QEventLoop) (Args: bool)
     user_confirm = pyqtSignal(str, str)  # Сигнал-шаблон для вопроса с двумя ответами (Args: Statement, Question)
     user_multi_choice = pyqtSignal(str, str, list)  # Сигнал-шаблон для вопроса со списком ответов (Args:  Title, Question, Option list)
@@ -32,7 +35,7 @@ class seam_worker(QObject):
 
     # Главная функция обработки запроса поиска
     def data_processor(self, p_from_path: os.PathLike[str] | str, p_to_path: os.PathLike[str] | str,
-                       p_search_text: os.PathLike[str] | str, p_search_options: dict) -> None:
+                       p_search_text: os.PathLike[str] | str, p_search_options: dict, p_search_nodes: list = []) -> None:
 
         # сбор списка файлов директории
         try:
@@ -74,7 +77,7 @@ class seam_worker(QObject):
                 QApplication.processEvents()  # Не блокируем интерфейс
             return
         try:
-            l_processed_list = self.process_iterator(l_file_list, p_search_text, p_search_options)
+            l_processed_list = self.process_iterator(l_file_list, p_search_text, p_search_options, p_search_nodes)
         except Exception as e:
             self.end_dual_signal.emit(
                 "Критическая ошибка!",
@@ -153,28 +156,82 @@ class seam_worker(QObject):
             return l_file_list
 
     # Вспомогательная функция поиска текста внутри xml файла
-    def _xml_process(self, xml_file_path: os.PathLike[str], search_text: str, options: dict) -> str | None | Exception:
-        try:
-            tree = ET.parse(xml_file_path)
-            xml_text = ET.tostring(tree.getroot(), encoding='unicode')
-            if options['register']:
-                return xml_file_path if search_text in xml_text else None
-            else:
+    def _xml_process(self, xml_file_path: os.PathLike[str], search_text: str, options: dict, p_search_nodes: list = []) -> os.PathLike[str] | None | Exception:
+        # Если текст поиска по нодам не пустой
+        if len(p_search_nodes):
+            # Проверка для запуска поиска по нодам
+            namespaces = os.path.normpath(os.path.join(os.getcwd(), 'namespaces.txt'))
+            # Наполненность файла (также проверяет наличие файла)
+            try:
+                with open(namespaces, 'r') as names:
+                    names_checker = len(names.read())
+                    # Если пустой файл
+                    if not names_checker:
+                        raise empty_spaces()
+            except:
+                # Если файла нет вообще
+                raise empty_spaces()
+
+            tree = etree.parse(xml_file_path)
+            root = tree.getroot()
+            for node in p_search_nodes:
+                names_dict = {}
+                search_names_pattern = r'([^:]+):\s*([^;]+);?'
+                with open(namespaces) as ns:
+                    names_bulk = re.findall(search_names_pattern, ns.read())
+                    names_dict.update({key.strip(): value.strip() for key,value in names_bulk})
+                    print(names_dict)
+                print(names_dict)
+                for space in names_dict:
+                    try:
+                        print(len(search_text))
+                        if len(search_text):
+                            print('space',space)
+                            search_q = [node_text.text for node_text in
+                                        root.xpath(f'//{space}:{node}', namespaces=names_dict)]
+                            if not options['case']:
+                                if search_text in search_q:
+                                    return xml_file_path
+                            else:
+                                if search_text.lower() in [el.lower() for el in search_q]:
+                                    return xml_file_path
+                        else:
+                            if root.xpath(f'//{space}:{node}', namespaces=names_dict):
+                                return xml_file_path
+                    except Exception as e:
+                        print((f'Node {node} not found: {e}'))
+            if not options['case']:
+                xml_text = etree.tounicode(root).lower()
+                search_text = search_text.lower()
+        # Если текст ноды пустой
+        else:
+            # Глобальный поиск без учёта нод
+            tree = etree.parse(xml_file_path)
+            xml_text = etree.tostring(tree.getroot(), encoding='unicode')
+            # Учёт регистра
+            if options['case']:
                 return xml_file_path if search_text.lower() in xml_text.lower() else None
-        except Exception as e:
-            raise Exception(f"Function '_xml_process' failed: {e}")
+            else:
+                return xml_file_path if search_text in xml_text else None
+
+        raise empty_from_e
+
 
     # Функция-итератор запуска поиска внутри файла - если нужен более сложный/умный поиск, то дорабатывать нужно её или вложенную
     # Текущий поиск может искать вхождения без учёта регистра (самый простой вариант)
-    def process_iterator(self, l_file_list: list, search_text: str, options: dict) -> list[str] | Exception:
+    def process_iterator(self, l_file_list: list, search_text: str, options: dict, p_search_nodes: list = []) -> list[str] | Exception:
         try:
             with ThreadPoolExecutor(max_workers=4) as executor:
                 results = list(executor.map(
-                    lambda f: self._xml_process(f, search_text, options), l_file_list
+                    lambda f: self._xml_process(f, search_text, options, p_search_nodes), l_file_list
                 ))
             return [r for r in results if r is not None]
+        except empty_spaces:
+            raise empty_spaces
+        except empty_from_e:
+            raise empty_from_e
         except Exception as e:
-            raise Exception("Function 'process_iterator' failed")
+            raise Exception(f"Function 'process_iterator' failed: {e}")
 
     # Проверка папки перемещения
     def target_check(self, l_file_list: list,destination_path: str | os.PathLike[str]):

@@ -1,15 +1,16 @@
 import os.path
+import re
 
-from PyQt6.QtCore import QDir, Qt, QThread
+from PyQt6.QtCore import Qt, QThread
 from PyQt6.QtGui import QIcon, QPixmap
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QCheckBox,
+
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QCheckBox, QMainWindow, QTextEdit, QTabWidget,
                              QPushButton, QFileDialog, QLineEdit, QMessageBox, QDialog, QHBoxLayout, QDialogButtonBox)
 
 from .worker_seam import seam_worker
 
-
 # Класс главного потока интерфейса
-class seam_gui(QWidget):
+class seam_gui(QMainWindow):#QWidget):
 
     # Конструктор
     def __init__(self) -> None:
@@ -27,8 +28,9 @@ class seam_gui(QWidget):
     def init_ui(self) -> None:
         # Общая информация
         self.setWindowTitle("SeaMs Reasonable")
-        self.setFixedSize(300, 450)
-        self.common_path = QDir.currentPath()
+        #self.setFixedSize(300, 550)
+        self.setGeometry(550, 350, 300, 550)
+        self.common_path = os.getcwd()
 
         # Иконки
         self.icon_path = QIcon(os.path.join(self.common_path, 'images', 'mainicon.png'))
@@ -37,39 +39,60 @@ class seam_gui(QWidget):
         self.error_icon_path = os.path.join(self.common_path, 'images', 'erricon.png')
         self.success_icon_path = os.path.join(self.common_path, 'images', 'sucicon.png')
 
-        layout = QVBoxLayout()
+        # Главный виджет и layout
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.main_layout = QHBoxLayout(self.central_widget)
+
+        # Создаем QTabWidget (контейнер вкладок)
+        self.tab_widget = QTabWidget()
+        self.main_layout.addWidget(self.tab_widget)
+
+        self.main_tab_ui()
+        self.extendet_settings_tab()
+
+    # Функция построения интерфейса главной вкладки
+    def main_tab_ui(self) -> None:
+        # Главная вкладка
+        main_tab = QWidget()
+        layout = QVBoxLayout(main_tab)
+        self.tab_widget.addTab(main_tab, "Главная")
 
         # Виджеты
         # Откуда
-        self.From_Dir_label = QLabel(f"From directory: ")
+        self.From_Dir_label = QLabel(f"Откуда: ")
         self.From_Dir_label_2 = QLabel(f"{self.common_path}")
-        self.From_Dir_button = QPushButton('Choose directory...')
+        self.From_Dir_button = QPushButton('Выберите директорию...')
         self.From_Dir_button.clicked.connect(lambda: self.choose_directory_dialog(self.From_Dir_label_2))
 
         # Куда
-        self.To_Dir_label = QLabel(f"To directory: ")
+        self.To_Dir_label = QLabel(f"Куда: ")
         self.To_Dir_label_2 = QLabel(f"{self.common_path}")
-        self.To_Dir_button = QPushButton('Choose directory...')
+        self.To_Dir_button = QPushButton('Выберите директорию...')
         self.To_Dir_button.clicked.connect(lambda: self.choose_directory_dialog(self.To_Dir_label_2))
 
         # Что ищем
-        self.Search_Text_label = QLabel('You are searching for: ')
-        self.Search_Text_line = QLineEdit("Мартья")  # ('Some happiness in this foul world')
+        self.Search_Text_label = QLabel('Поисковой запрос: ')
+        self.Search_Text_line = QLineEdit("Мартья")
+        #self.Search_Text_line.setPlaceholderText('Some happiness in this foul world') - плейсхолдер
+
+        self.Search_Node_label = QLabel('Ноды с учётом регистра\n(Используйте ; для разделителя):')
+        self.Search_Node_line = QLineEdit("")
 
         # Опции
-        self.checkbox_nodes = QCheckBox('nodes (pending...)')
+        #self.checkbox_nodes = QCheckBox('nodes (pending...)')
         self.checkbox_filenames = QCheckBox('files (pending...)')
         self.checkbox_insides = QCheckBox('insides (pending...)')
-        self.checkbox_register = QCheckBox('Учитывать регистр')
+        self.checkbox_case = QCheckBox('Учитывать регистр')
         self.checkbox_partial = QCheckBox('partial (pending...)')
         self.checkbox_only = QCheckBox('only (pending...)')
 
         # Вспомогательные данные для валидации выбора опций
         self.option_dict = {}
-        self.option_dict['nodes'] = self.checkbox_nodes.isChecked()
+        #self.option_dict['nodes'] = self.checkbox_nodes.isChecked()
         self.option_dict['filenames'] = self.checkbox_filenames.isChecked()
         self.option_dict['insides'] = self.checkbox_insides.isChecked()
-        self.option_dict['register'] = self.checkbox_register.isChecked()
+        self.option_dict['case'] = self.checkbox_case.isChecked()
         self.option_dict['partial'] = self.checkbox_partial.isChecked()
         self.option_dict['only'] = self.checkbox_only.isChecked()
 
@@ -82,9 +105,12 @@ class seam_gui(QWidget):
         """
 
         # Разделители
-        self.divider_1 = QLabel('******************************************************')
-        self.divider_2 = QLabel('******************************************************')
-        self.divider_3 = QLabel('******************************************************')
+        self.divider_1 = QLabel('******')
+        self.divider_1.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.divider_2 = QLabel('******')
+        self.divider_2.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.divider_3 = QLabel('******')
+        self.divider_3.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Размещение виджетов
 
@@ -103,13 +129,15 @@ class seam_gui(QWidget):
         # Что ищем
         layout.addWidget(self.Search_Text_label)
         layout.addWidget(self.Search_Text_line)
+        layout.addWidget(self.Search_Node_label)
+        layout.addWidget(self.Search_Node_line)
         layout.addWidget(self.divider_3)
 
         # Опции
-        layout.addWidget(self.checkbox_nodes)
+        #layout.addWidget(self.checkbox_nodes)
         layout.addWidget(self.checkbox_filenames)
         layout.addWidget(self.checkbox_insides)
-        layout.addWidget(self.checkbox_register)
+        layout.addWidget(self.checkbox_case)
         layout.addWidget(self.checkbox_partial)
         layout.addWidget(self.checkbox_only)
 
@@ -156,10 +184,10 @@ class seam_gui(QWidget):
         self.processor.end_dual_signal.connect(self.show_err_or_succ)
 
         # Опции
-        self.checkbox_nodes.stateChanged.connect(self._supp_options)
+        #self.checkbox_nodes.stateChanged.connect(self._supp_options)
         self.checkbox_filenames.stateChanged.connect(self._supp_options)
         self.checkbox_insides.stateChanged.connect(self._supp_options)
-        self.checkbox_register.stateChanged.connect(self._supp_options)
+        self.checkbox_case.stateChanged.connect(self._supp_options)
         self.checkbox_partial.stateChanged.connect(self._supp_options)
         self.checkbox_only.stateChanged.connect(self._supp_options)
 
@@ -173,8 +201,16 @@ class seam_gui(QWidget):
         to_dir = self.To_Dir_label_2.text()
         search_text = self.Search_Text_line.text()
 
+        # Регулярка для обработки текста нод в нижний регистр с игнорированием пустых
+        search_nodes_pattern = r'\s*;\s*'
+        search_nodes = [
+            node.strip()# TODO: .lower() добавить к опции учёта регистра - разнести опцию учёта регистра на оба поисковых поля
+            for node in re.split(search_nodes_pattern, self.Search_Node_line.text())
+            if node.strip()
+        ]
+
         try:
-            self.processor.start_processing.emit(from_dir, to_dir, search_text, self.option_dict)
+            self.processor.start_processing.emit(from_dir, to_dir, search_text, self.option_dict, search_nodes)
         except Exception as e:
             print(e)
 
@@ -210,10 +246,10 @@ class seam_gui(QWidget):
     def _supp_options(self):
         try:
             # Перезапись значений
-            self.option_dict['nodes'] = self.checkbox_nodes.isChecked()
+            #self.option_dict['nodes'] = self.checkbox_nodes.isChecked()
             self.option_dict['filenames'] = self.checkbox_filenames.isChecked()
             self.option_dict['insides'] = self.checkbox_insides.isChecked()
-            self.option_dict['register'] = self.checkbox_register.isChecked()
+            self.option_dict['case'] = self.checkbox_case.isChecked()
             self.option_dict['partial'] = self.checkbox_partial.isChecked()
             self.option_dict['only'] = self.checkbox_only.isChecked()
 
@@ -225,27 +261,25 @@ class seam_gui(QWidget):
             # Логика отключения кнопок
             # Если включена опция "только" и выбран один из вариантов
             if any(self.option_dict[k] for k in variable_keys) and self.option_dict[last_key]:
-                self.checkbox_nodes.setDisabled(True) if not self.checkbox_nodes.isChecked() else None
+                #self.checkbox_nodes.setDisabled(True) if not self.checkbox_nodes.isChecked() else None
                 self.checkbox_filenames.setDisabled(True) if not self.checkbox_filenames.isChecked() else None
                 self.checkbox_insides.setDisabled(True) if not self.checkbox_insides.isChecked() else None
-                self.checkbox_register.setDisabled(True) if not self.checkbox_register.isChecked() else None
+                self.checkbox_case.setDisabled(True) if not self.checkbox_case.isChecked() else None
                 self.checkbox_partial.setDisabled(True) if not self.checkbox_partial.isChecked() else None
             # Если 2 и более выбрано
             elif sum(self.option_dict[k] for k in variable_keys) >= 2:
                self.checkbox_only.setDisabled(True)
             else:
                 self.checkbox_only.setDisabled(False)
-                self.checkbox_nodes.setDisabled(False)
+                #self.checkbox_nodes.setDisabled(False)
                 self.checkbox_filenames.setDisabled(False)
                 self.checkbox_insides.setDisabled(False)
-                self.checkbox_register.setDisabled(False)
+                self.checkbox_case.setDisabled(False)
                 self.checkbox_partial.setDisabled(False)
                 self.checkbox_only.setDisabled(False)
 
         except Exception as e:
             print(e)
-
-
 
     # Функция отображения диалогового окна с вводом текста
     def show_input_dialog(self, title: str, question: str, base_name: str) -> None:
@@ -363,8 +397,49 @@ class seam_gui(QWidget):
         dialog.exec()
         return dialog
 
-# if __name__ == "__main__":
-#     app = QApplication(sys.argv)
-#     window = seam_gui()
-#     window.show()
-#     sys.exit(app.exec())
+    # Функция построения интерфейса вкладки доп. настроек
+    def extendet_settings_tab(self) -> None:
+        # Вкладка расширенных настроек
+        ext_settings = QWidget()
+        ext_layout = QVBoxLayout(ext_settings)
+        self.tab_widget.addTab(ext_settings, "Доп. настройки")
+
+        self.namespaces_label = QLabel("Поле для указания имён пространств в xml")
+        self.namespaces_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ext_layout.addWidget(self.namespaces_label)
+
+        self.namespaces_text = QTextEdit()
+        if os.path.exists(namesp_ath:=os.path.join(self.common_path, 'namespaces.txt')):
+            with open(namesp_ath, 'r') as fp:
+                text = fp.read()
+                self.namespaces_text.setText(text)
+        else:
+            self.namespaces_text.setPlaceholderText("Введите текст здесь через ';'\n"
+                                                   "Например:\n"
+                                                   "soap: http://soap.org/soap/;\n"
+                                                   "m: http://mem.org/\n")
+
+        self.namespaces_confirm = QPushButton('Перезаписать')
+        self.namespaces_confirm.clicked.connect(lambda: self.name_space_n_time())
+
+        ext_layout.addWidget(self.namespaces_text)
+        ext_layout.addWidget(self.namespaces_confirm)
+
+    # Функция для работы с namespaces
+    def name_space_n_time(self):
+        # TODO: переписать show_confirmation для использования не только в работнике
+        #self.show_confirmation('Перезапись namespaces', 'Вы уверены?')
+
+        reply = QMessageBox.question(
+            self, 'Перезапись namespaces', 'Вы уверены?',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == 16384:
+            try:
+                namesp_ath = os.path.join(self.common_path, 'namespaces.txt')
+                text = self.namespaces_text.toPlainText()
+                with open(namesp_ath, 'w') as fp:
+                    print(text)
+                    fp.write(text)
+            except Exception as e:
+                print(f"Function 'name_spase_n_time' failed: {e}")
